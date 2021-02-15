@@ -24,10 +24,20 @@ end
 local function loop()
   while true do
     clock.sync(CLOCK_DIVS[params:get("div")])
+
+    local amp = params:get("amp")
+    for i=1,4 do
+      if params:get(i.."lfo") == 2 then
+        if params:get(i.."lfo_target")==3 then amp = amp + lfo[i].slope end
+      end
+    end
+    amp = util.clamp(amp, 0, 1)
     
     step = util.wrap(step + 1, 1, #seq)
     dn = math.floor(params:get("spread") * seq[step])
     n = transpose_from_root(dn)
+
+    engine.amp(amp)
     engine.hz(MusicUtil.note_num_to_freq(n))
 
     redraw()
@@ -39,9 +49,9 @@ function key(n,z)
 end
 
 function enc(n,d)
-  if n==2 and alt==false then params:delta("x", d/params:get("x_denom")) end
+  if n==2 and alt==false then params:delta("x", 10*d/params:get("x_denom")) end
   if n==2 and alt==true then params:delta("x_denom", d) end
-  if n==3 and alt==false then params:delta("y", d/params:get("y_denom")) end
+  if n==3 and alt==false then params:delta("y", 10*d/params:get("y_denom")) end
   if n==3 and alt==true then params:delta("y_denom", d) end
 
   seq = gen_seq()
@@ -60,9 +70,10 @@ function gen_seq()
   end
   
   local seq = {}
+  local steps = params:get("steps")
   for x=1, params:get("steps") do
-    world_x = params:get("x") + (128*x/params:get("steps")) + 100*x_offset
-    world_y = params:get("y") + 100*y_offset
+    world_x = params:get("x") + (128*x/steps) + 128*x_offset
+    world_y = params:get("y") + 128*y_offset
     seq[#seq+1] = perlin:noise(world_x/params:get("x_denom"), world_y/params:get("y_denom"))
   end
   return seq
@@ -94,9 +105,19 @@ function init()
     type="option", id="div", options=CLOCK_DIVS,
     default=tab.key(CLOCK_DIVS, 1/4)
   }
+
+  params:add{
+    type="control", id="amp",
+    controlspec=controlspec.new(0,1,lin,0.01,0.8)
+  }
   
-   for i=1,4 do lfo[i].lfo_targets={"x", "y"} end
+  for i=1,4 do lfo[i].lfo_targets={"x", "y", "amp"} end
   lfo.init()
+  
+  params:lookup_param("1lfo_freq").controlspec = controlspec.new(0.01, 10.0, "lin", 0.01, 0.01, "", 0.001)
+  params:lookup_param("2lfo_freq").controlspec = controlspec.new(0.01, 10.0, "lin", 0.01, 0.01, "", 0.001)
+  params:lookup_param("3lfo_freq").controlspec = controlspec.new(0.01, 10.0, "lin", 0.01, 0.01, "", 0.001)
+  params:lookup_param("4lfo_freq").controlspec = controlspec.new(0.01, 10.0, "lin", 0.01, 0.01, "", 0.001)
 
   seq = gen_seq()
   redraw()
@@ -105,13 +126,6 @@ function init()
 end
 
 function lfo.process()
-  -- print(params:get("1lfo"), lfo[1].slope)
-  -- for i=1,4 do
-  --   if params:get(i.."lfo") == 2 then
-  --     if params:get(i.."lfo_target")==1 then params:set("x", 10/params:get("x_denom") * lfo.scale(lfo[i].slope, 0, 0, -1.0, 1.0)) end
-  --     if params:get(i.."lfo_target")==2 then params:set("y", 10/params:get("y_denom") * lfo.scale(lfo[i].slope, 0, 0, -1.0, 1.0)) end
-  --   end
-  -- end
   seq = gen_seq()
   redraw()
 end
